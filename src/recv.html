@@ -6,7 +6,7 @@
 <style>
   body{margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;font:16px system-ui,sans-serif}
   button,#out a{display:block;font-size:18px;padding:12px;text-align:center}
-  video{width:100%;max-height:55vh;background:#000;object-fit:contain}
+  video{width:min(100%,55vh);aspect-ratio:1;margin:auto;background:#000;object-fit:cover}  /* 表示＝読み取り範囲 */
   progress{width:100%;height:24px}
   #er{color:#c00}
 </style>
@@ -17,17 +17,17 @@
 <div id="er"></div>
 <div id="out"></div>
 <script>
-const MAXW = 1000;  // jsQRに渡す画像の長辺(px)
-const EVERY = 60;   // 読み取り間隔(ms)
+const SIZE = 560;  // 映像中央の正方形をこの大きさにしてjsQRへ(px)
 
 const $ = id => document.getElementById(id);
 const v = $('v'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+cv.width = cv.height = SIZE;
 const T = new Uint32Array(256).map((_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ n >>> 1 : n >>> 1; return n; });
 const crc = b => { let c = -1; for (const x of b) c = T[(c ^ x) & 255] ^ c >>> 8; return (c ^ -1) >>> 0; };
 let S, stream, timer;
 
 function reset() { S = { id: -1, n: 0, got: 0, p: [] }; $('pg').value = 0; $('st').textContent = '待機中'; }
-function stop() { clearTimeout(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+function stop() { v.cancelVideoFrameCallback(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
 
 $('go').onclick = async () => {
   stop(); reset();
@@ -38,21 +38,17 @@ $('go').onclick = async () => {
   } catch (e) { $('er').textContent = 'カメラを起動できません: ' + e.message; return; }
   v.srcObject = stream;
   await v.play();
-  scan();
+  timer = v.requestVideoFrameCallback(scan);
 };
 
-function scan() {
+function scan() {  // カメラの新しいフレームごとに1回呼ばれる
   if (!stream) return;
-  const w0 = v.videoWidth, h0 = v.videoHeight;
-  if (w0) {
-    const k = Math.min(1, MAXW / Math.max(w0, h0)), w = Math.round(w0 * k), h = Math.round(h0 * k);
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-    cx.drawImage(v, 0, 0, w, h);
-    const code = jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
-    if (code) take(code.binaryData);
-    if (S.n && S.got === S.n) return finish();
-  }
-  timer = setTimeout(scan, EVERY);
+  const w = v.videoWidth, h = v.videoHeight, s = Math.min(w, h);
+  cx.drawImage(v, (w - s) / 2, (h - s) / 2, s, s, 0, 0, SIZE, SIZE);
+  const code = jsQR(cx.getImageData(0, 0, SIZE, SIZE).data, SIZE, SIZE, { inversionAttempts: 'dontInvert' });
+  if (code) take(code.binaryData);
+  if (S.n && S.got === S.n) return finish();
+  timer = v.requestVideoFrameCallback(scan);
 }
 
 function take(b) {  // [F1][ID 4B][番号 2B][総数 2B][データ]
