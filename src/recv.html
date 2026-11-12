@@ -65,11 +65,10 @@ function take(b) {  // [F1][ID 4B][番号 2B][総数 2B][データ]
 async function finish() {
   try {
     const m = JSON.parse(new TextDecoder().decode(S.p[0]));
-    let d = new Uint8Array(await new Blob(S.p.slice(1)).arrayBuffer());
-    if (d.length !== m.l) throw Error('サイズ不一致');
-    if (m.z) d = new Uint8Array(await new Response(new Blob([d]).stream()
-      .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer().catch(() => { throw Error('展開失敗'); }));
-    if (d.length !== m.s || crc(d) !== m.c) throw Error('チェックサム不一致');
+    let blob = new Blob(S.p.slice(1));
+    if (m.z) blob = await new Response(blob.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
+    const d = new Uint8Array(await blob.arrayBuffer());
+    if (crc(d) !== m.c) throw Error('チェックサム不一致');
     stop();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([d], { type: m.t || 'application/octet-stream' }));

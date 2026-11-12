@@ -45,7 +45,7 @@ $('f').onchange = async () => {
     b.set(body, 9);
     return String.fromCharCode(...b);
   };
-  const meta = { n: file.name.slice(0, 80), s: raw.length, l: data.length, c: crc(raw), z, t: file.type };
+  const meta = { n: file.name.slice(0, 80), s: raw.length, c: crc(raw), z, t: file.type };
   frames = [frame(0, new TextEncoder().encode(JSON.stringify(meta)))];
   for (let i = 1; i < n; i++) frames.push(frame(i, data.subarray((i - 1) * CH, i * CH)));
   // 全フレームを同じ大きさで表示するため、最長フレームに合わせて型番を固定
