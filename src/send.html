@@ -51,6 +51,7 @@ $('f').onchange = async () => {
   // 全フレームを同じ大きさで表示するため、最長フレームに合わせて型番を固定
   ver = (makeQR(frames.reduce((a, b) => b.length > a.length ? b : a), 0).getModuleCount() - 17) / 4;
   pos = 0; lap = 1;
+  navigator.wakeLock?.request('screen').catch(() => {});  // 転送中にモニターが消えないように
   tick();
 };
 

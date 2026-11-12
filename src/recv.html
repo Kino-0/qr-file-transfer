@@ -38,6 +38,7 @@ $('go').onclick = async () => {
   } catch (e) { $('er').textContent = 'カメラを起動できません: ' + e.message; return; }
   v.srcObject = stream;
   await v.play();
+  navigator.wakeLock?.request('screen').catch(() => {});
   timer = v.requestVideoFrameCallback(scan);
 };
 
