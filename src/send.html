@@ -26,20 +26,14 @@ const crc = b => { let c = -1; for (const x of b) c = T[(c ^ x) & 255] ^ c >>> 8
 const makeQR = (s, v) => { const q = qrcode(v, EC); q.addData(s, 'Byte'); q.make(); return q; };
 let frames = [], ver = 0, pos = 0, lap = 1, timer, qr;
 
-async function deflate(u8) {
-  if (!window.CompressionStream) return null;
-  const s = new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(s).arrayBuffer());
-}
-
 $('f').onchange = async () => {
   const file = $('f').files[0];
   if (!file) return;
   clearTimeout(timer);
   const raw = new Uint8Array(await file.arrayBuffer());
-  const zipped = await deflate(raw);
+  const zipped = new Uint8Array(await new Response(file.stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
   if (file !== $('f').files[0]) return;  // 処理中に別のファイルが選ばれた
-  const z = zipped && zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
+  const z = zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
   const data = z ? zipped : raw;
   const n = Math.max(1, Math.ceil(data.length / CH)) + 1;  // 総数 = データ分割数 + 1
   if (n > 65535) { $('st').textContent = 'ファイルが大きすぎます'; return; }
