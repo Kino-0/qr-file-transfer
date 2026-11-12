@@ -61,11 +61,11 @@ $('f').onchange = async () => {
 };
 
 function tick() {
+  timer = setTimeout(tick, 1000 / $('sp').value);  // 先に予約し、QR生成の時間で遅れないように
   qr = makeQR(frames[pos], ver);
   draw();
   $('st').textContent = `フレーム ${pos + 1}/${frames.length} ・ ${lap}周目`;
   if (++pos >= frames.length) { pos = 0; lap++; }
-  timer = setTimeout(tick, 1000 / $('sp').value);
 }
 
 function draw() {  // クワイエットゾーン4モジュール、整数デバイスピクセルで描画
