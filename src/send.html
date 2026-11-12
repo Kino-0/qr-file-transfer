@@ -26,19 +26,14 @@ const crc = b => { let c = -1; for (const x of b) c = T[(c ^ x) & 255] ^ c >>> 8
 const makeQR = (s, v) => { const q = qrcode(v, EC); q.addData(s, 'Byte'); q.make(); return q; };
 let frames = [], ver = 0, pos = 0, lap = 1, timer, qr;
 
-async function deflate(u8) {
-  if (!window.CompressionStream) return null;
-  const s = new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(s).arrayBuffer());
-}
-
 $('f').onchange = async () => {
   const file = $('f').files[0];
   if (!file) return;
   clearTimeout(timer);
   const raw = new Uint8Array(await file.arrayBuffer());
-  const zipped = await deflate(raw);
-  const z = zipped && zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
+  const zipped = new Uint8Array(await new Response(file.stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+  if (file !== $('f').files[0]) return;  // 処理中に別のファイルが選ばれた
+  const z = zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
   const data = z ? zipped : raw;
   const n = Math.max(1, Math.ceil(data.length / CH)) + 1;  // 総数 = データ分割数 + 1
   if (n > 65535) { $('st').textContent = 'ファイルが大きすぎます'; return; }
@@ -50,21 +45,22 @@ $('f').onchange = async () => {
     b.set(body, 9);
     return String.fromCharCode(...b);
   };
-  const meta = { n: file.name.slice(0, 80), s: raw.length, l: data.length, c: crc(raw), z, t: file.type };
+  const meta = { n: file.name.slice(0, 80), s: raw.length, c: crc(raw), z, t: file.type };
   frames = [frame(0, new TextEncoder().encode(JSON.stringify(meta)))];
   for (let i = 1; i < n; i++) frames.push(frame(i, data.subarray((i - 1) * CH, i * CH)));
   // 全フレームを同じ大きさで表示するため、最長フレームに合わせて型番を固定
   ver = (makeQR(frames.reduce((a, b) => b.length > a.length ? b : a), 0).getModuleCount() - 17) / 4;
   pos = 0; lap = 1;
+  navigator.wakeLock?.request('screen').catch(() => {});  // 転送中にモニターが消えないように
   tick();
 };
 
 function tick() {
+  timer = setTimeout(tick, 1000 / $('sp').value);  // 先に予約し、QR生成の時間で遅れないように
   qr = makeQR(frames[pos], ver);
   draw();
-  $('st').textContent = `フレーム ${pos + 1}/${frames.length} ・ ${lap}周目`;
+  $('st').textContent = `フレーム ${pos + 1}/${frames.length} ・ ${lap}周目（1周 約${Math.ceil(frames.length / $('sp').value)}秒）`;
   if (++pos >= frames.length) { pos = 0; lap++; }
-  timer = setTimeout(tick, 1000 / $('sp').value);
 }
 
 function draw() {  // クワイエットゾーン4モジュール、整数デバイスピクセルで描画
