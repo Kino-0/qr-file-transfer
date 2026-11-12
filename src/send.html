@@ -38,6 +38,7 @@ $('f').onchange = async () => {
   clearTimeout(timer);
   const raw = new Uint8Array(await file.arrayBuffer());
   const zipped = await deflate(raw);
+  if (file !== $('f').files[0]) return;  // 処理中に別のファイルが選ばれた
   const z = zipped && zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
   const data = z ? zipped : raw;
   const n = Math.max(1, Math.ceil(data.length / CH)) + 1;  // 総数 = データ分割数 + 1
