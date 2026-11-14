@@ -12,7 +12,7 @@
 <div id="bar">
   <input type="file" id="f">
   <label>速度 <input type="range" id="sp" min="2" max="30" value="12"> <output id="fo">12</output> fps</label>
-  <label>密度 <select id="ver"><option value="15">低(型番15)<option value="20">中(20)<option value="25" selected>標準(25)<option value="32">高(32)<option value="40">最高(40)</select></label>
+  <label>密度 <select id="ver"><option value="15">最低<option value="20">低<option value="25" selected>標準<option value="32">高<option value="40">最高</select></label>
   <span id="st">ファイルを選択してください</span>
 </div>
 <canvas id="cv"></canvas>
@@ -35,15 +35,16 @@ const mask = (q, K, m) => {
   if (K & 31) m[m.length - 1] &= (1 << (K & 31)) - 1;
   return m;
 };
-let src, K = 0, L, CH, ver, id, seq = 0, last = 0, t0 = 0, raf, size = 0;
+let src, K = 0, L, CH, ver, id, seq = 0, last = 0, t0 = 0, raf, size = 0, run = 0;
 
-$('f').onchange = $('ver').onchange = async () => {
-  const file = $('f').files[0];
+async function start() {  // ファイルか密度が変わるたびに最初から送り直す
+  const file = $('f').files[0], my = ++run;
   if (!file) return;
   cancelAnimationFrame(raf);
+  $('st').textContent = '準備中…';
   const raw = new Uint8Array(await file.arrayBuffer());
   const zipped = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
-  if (file !== $('f').files[0]) return;  // 処理中に別のファイルが選ばれた
+  if (my !== run) return;  // 準備中にファイルか密度が変更された
   const z = zipped.length < raw.length ? 1 : 0;  // 小さくなるときだけ圧縮
   const body = z ? zipped : raw;
   const meta = new TextEncoder().encode(JSON.stringify({ n: file.name.slice(0, 80), s: raw.length, c: crc(raw), z, t: file.type, l: body.length }));
@@ -60,7 +61,7 @@ $('f').onchange = $('ver').onchange = async () => {
   seq = 0; last = 0; t0 = performance.now();
   navigator.wakeLock?.request('screen').catch(() => {});  // 転送中にモニターが消えないように
   raf = requestAnimationFrame(loop);
-};
+}
 
 function frame(q) {  // q < K は元のブロック、q >= K は約半数のブロックのXOR(どの K 枚+数枚からでも復元できる)
   const b = new Uint8Array(HDR + CH), acc = new Uint32Array(L), dv = new DataView(b.buffer);
@@ -84,7 +85,8 @@ function loop(t) {  // 画面の更新に合わせて切り替える(setTimeout�
   code.toCanvas(cv, { pad: 4, off: [255, 255, 255] });  // 1モジュール=1ピクセルで描き、拡大はCSSに任せる
   if (cv.width !== size) { size = cv.width; layout(); }
   seq++;
-  $('st').textContent = seq <= K ? `データ ${seq}/${K}（約${Math.ceil(K / fps)}秒）` : `補完 ${seq - K}枚目 ・ 経過${Math.round((t - t0) / 1000)}秒（受信側が完了するまで続けます）`;
+  const sec = Math.max(0, (t - t0) / 1000 | 0);
+  $('st').textContent = `送信 ${seq}枚（必要 ${K}枚）・ 経過 ${sec / 60 | 0}:${String(sec % 60).padStart(2, '0')}`;
 }
 
 function layout() {  // 1モジュールを整数デバイスピクセルにする
@@ -94,6 +96,8 @@ function layout() {  // 1モジュールを整数デバイスピクセルにす�
   cv.style.width = cv.style.height = size * px / dpr + 'px';
 }
 
-onresize = layout;
-$('sp').oninput = () => $('fo').value = $('sp').value;
+$('f').addEventListener('change', start);
+$('ver').addEventListener('change', start);
+$('sp').addEventListener('input', () => $('fo').value = $('sp').value);
+addEventListener('resize', layout);
 </script>

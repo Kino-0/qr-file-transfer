@@ -36,12 +36,12 @@ const mask = (q, K, m) => {  // 送信側と同じ
   return m;
 };
 const ready = ZXingWASM.prepareZXingModule({ overrides: { wasmBinary: Uint8Array.from(atob('/*@wasm64*/'), c => c.charCodeAt(0)) }, fireImmediately: true });
-let S, stream, timer, stat = { n: 0, ok: 0, ms: 0 };
+let S, stream, timer;
 
 function reset() { S = { id: -1, K: 0, CH: 0, rank: 0, piv: [], seen: new Set() }; $('pg').value = 0; $('st').textContent = '待機中'; }
 function stop() { v.cancelVideoFrameCallback(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
 
-$('go').onclick = async () => {
+$('go').addEventListener('click', async () => {
   stop(); reset();
   $('er').textContent = ''; $('out').textContent = '';
   try {
@@ -55,18 +55,16 @@ $('go').onclick = async () => {
   await v.play();
   navigator.wakeLock?.request('screen').catch(() => {});
   timer = v.requestVideoFrameCallback(scan);
-};
+});
 
 async function scan() {  // カメラの新しいフレームごとに1回(デコード中に来たフレームは自然に間引かれる)
   if (!stream) return;
   const w = v.videoWidth, h = v.videoHeight, s = Math.min(w, h), d = Math.min(s, MAX);
   if (cv.width !== d) cv.width = cv.height = d;
-  const t = performance.now();
   cx.drawImage(v, (w - s) / 2, (h - s) / 2, s, s, 0, 0, d, d);
   const [code] = await ZXingWASM.readBarcodes(cx.getImageData(0, 0, d, d), OPT);
-  stat.n++; stat.ms += performance.now() - t;
   if (!stream) return;
-  if (code?.bytes) { stat.ok++; take(code.bytes); }
+  if (code?.bytes) take(code.bytes);
   if (S.K && S.rank === S.K) return finish();
   timer = v.requestVideoFrameCallback(scan);
 }
@@ -87,7 +85,7 @@ function take(b) {  // 1枚 = ブロックの連立方程式(GF(2))の1行。届
       for (let j = w; j < R; j++) row[j] ^= p[j];
     }
   $('pg').value = S.rank;
-  $('st').textContent = `受信 ${S.rank}/${K} ・ 読取 ${stat.ok}/${stat.n}枚 平均${(stat.ms / stat.n).toFixed(0)}ms`;
+  $('st').textContent = `受信 ${S.rank}/${K}`;
 }
 
 async function finish() {
@@ -111,7 +109,7 @@ async function finish() {
     a.download = m.n || 'download';
     a.textContent = `保存: ${m.n} (${m.s.toLocaleString()} バイト)`;
     $('out').replaceChildren(a);
-    $('st').textContent = '受信完了・検証OK';
+    $('st').textContent = '受信完了';
     $('er').textContent = '';
   } catch (e) {
     $('er').textContent = 'エラー: ' + e.message + '(最初から受信し直します)';
